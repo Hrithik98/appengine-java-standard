@@ -604,7 +604,7 @@ class ModulesServiceImpl implements ModulesService {
   // CHANGED TO PROTECTED for safer overriding
   @VisibleForTesting
   protected boolean hasOptedIn() {
-    String optInValue = System.getenv("OPT_IN_MODULES");
+    String optInValue = System.getenv("MODULES_USE_ADMIN_API");
     return "true".equalsIgnoreCase(optInValue);
   }
 
