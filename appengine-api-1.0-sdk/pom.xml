@@ -43,6 +43,11 @@
       <artifactId>joda-time</artifactId>
       <optional>true</optional>
     </dependency>
+    <dependency>
+      <groupId>com.google.auth</groupId>
+      <artifactId>google-auth-library-oauth2-http</artifactId>
+      <version>1.41.0</version>
+    </dependency>
   </dependencies>
   <build>
     <plugins>
@@ -111,6 +116,10 @@
                   <!-- TODO: Change the package to live in apphosting instead. -->
                   <pattern>com.google.appengine.api.search.proto.SearchServicePb</pattern>
                   <shadedPattern>com.google.appengine.repackaged.com.google.appengine.api.search.proto.SearchServicePb</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.google.auth</pattern>
+                  <shadedPattern>com.google.appengine.repackaged.com.google.auth</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.google.borg.borgcron</pattern>
@@ -456,6 +465,8 @@
                     <include>com/google/common/xml/**</include>
                     <include>com/google/common/util/concurrent/**</include>
                     <include>com/google/thirdparty/publicsuffix/**</include>
+                    <include>com.google.auth:google-auth-library-credentials:*</include>
+                  <include>com.google.auth:google-auth-library-oauth2-http:*</include>
                   </includes>
                 </filter>
                 <filter>
@@ -530,6 +541,7 @@
                   <include>io.opencensus:opencensus-contrib-http-util:*</include>
                   <!-- needed for remote_api for opencensus. -->
                   <include>io.grpc:grpc-api:*</include>
+                  <include>com.google.auth:google-auth-library-oauth2-http:*</include>
                </includes>
               </artifactSet>
             </configuration>
