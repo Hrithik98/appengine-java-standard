@@ -43,6 +43,16 @@
       <artifactId>joda-time</artifactId>
       <optional>true</optional>
     </dependency>
+    <dependency>
+      <groupId>com.google.api-client</groupId>
+      <artifactId>google-api-client</artifactId>
+      <version>1.35.2</version> <!-- Or the latest compatible version -->
+    </dependency>
+    <dependency>
+      <groupId>com.google.http-client</groupId>
+      <artifactId>google-http-client</artifactId>
+    <version>1.44.2</version> <!-- Corresponding recent version -->
+  </dependency>
   </dependencies>
   <build>
     <plugins>
@@ -67,13 +77,16 @@
                   <shadedPattern>com.google.appengine.repackaged.android.org.apache.commons.codec</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>com.google.api.client</pattern>
-                  <shadedPattern>com.google.appengine.repackaged.com.google.api.client</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.google.api.server.proto</pattern>
-                  <shadedPattern>com.google.appengine.repackaged.com.google.api.server.proto</shadedPattern>
-                </relocation>
+		    <pattern>com.google.api.client</pattern>
+		    <shadedPattern>com.google.appengine.repackaged.com.google.api.client</shadedPattern>
+		    <excludes>
+		      <exclude>com.google.api.services.appengine.**</exclude>
+		    </excludes>
+		  </relocation>
+		  <relocation>
+		    <pattern>com.google.api.server.proto</pattern>
+		    <shadedPattern>com.google.appengine.repackaged.com.google.api.server.proto</shadedPattern>
+		  </relocation>
                 <relocation>
                   <!-- Update the Cloud Datastore JSON filter to use the v1 protos                       (it still depends on the v1beta2 protos) -->
                   <pattern>com.google.api.services.datastore</pattern>
@@ -487,6 +500,9 @@
                   <include>io.opencensus:opencensus-contrib-http-util:*</include>
                   <!-- needed for remote_api for opencensus. -->
                   <include>io.grpc:grpc-api:*</include>
+                  <include>com.google.auth:google-auth-library-oauth2-http:*</include>
+                  <include>com.google.auth:google-auth-library-credentials:*</include>
+                  <include>com.google.apis:google-api-services-appengine:*</include>
                </includes>
               </artifactSet>
             </configuration>
