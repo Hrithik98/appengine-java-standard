@@ -70,9 +70,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
-/**
- * Implementation of {@link ModulesService}.
- */
+/** Implementation of {@link ModulesService}. */
 class ModulesServiceImpl implements ModulesService {
   private static final Logger logger = Logger.getLogger(ModulesServiceImpl.class.getName());
   private static final String STARTING_STARTED_MESSAGE =
@@ -80,8 +78,7 @@ class ModulesServiceImpl implements ModulesService {
   private static final String STOPPING_STOPPED_MESSAGE =
       "Attempted to stop an already stopped module version, continuing";
 
-  @VisibleForTesting
-  static final String PACKAGE = "modules";
+  @VisibleForTesting static final String PACKAGE = "modules";
   private static final String GOOGLE_CLOUD_PROJECT_ENV = "GOOGLE_CLOUD_PROJECT";
   private static final String GAE_APPLICATION_ENV = "GAE_APPLICATION";
 
@@ -196,19 +193,26 @@ class ModulesServiceImpl implements ModulesService {
     if (!hasOptedIn()) {
       return getModulesAsyncLegacy();
     }
-    return submit(() -> {
-      Appengine client = getAdminAPIClientWithUseragent("get_modules");
-      List<Service> services = client.apps().services().list(this.projectId).execute().getServices();
-      if (services == null) {
-        return Collections.emptySet();
-      }
-      return services.stream().map(Service::getId).collect(Collectors.toSet());
-    });
+    return submit(
+        () -> {
+          try {
+            Appengine client = getAdminAPIClientWithUseragent("get_modules");
+            List<Service> services =
+                client.apps().services().list(this.projectId).execute().getServices();
+            if (services == null) {
+              return Collections.emptySet();
+            }
+            return services.stream().map(Service::getId).collect(Collectors.toSet());
+          } catch (IOException e) {
+            throw new ModulesException("Could not retrieve modules from Admin API", e);
+          }
+        });
   }
 
   private Future<Set<String>> getModulesAsyncLegacy() {
     GetModulesRequest.Builder requestBuilder = GetModulesRequest.newBuilder();
-    Future<byte[]> rawFuture = makeApiCall(PACKAGE, "GetModules", requestBuilder.build().toByteArray());
+    Future<byte[]> rawFuture =
+        makeApiCall(PACKAGE, "GetModules", requestBuilder.build().toByteArray());
     return new ModulesServiceFutureWrapper<>(rawFuture, "GetModules") {
       @Override
       protected Set<String> wrap(byte[] key) throws InvalidProtocolBufferException {
@@ -224,15 +228,26 @@ class ModulesServiceImpl implements ModulesService {
       return getVersionsAsyncLegacy(module);
     }
     String targetModule = (module != null) ? module : getCurrentModule();
-    return submit(() -> {
-      Appengine client = getAdminAPIClientWithUseragent("get_versions");
-      List<Version> versions =
-          client.apps().services().versions().list(this.projectId, targetModule).execute().getVersions();
-      if (versions == null) {
-        return Collections.emptySet();
-      }
-      return versions.stream().map(Version::getId).collect(Collectors.toSet());
-    });
+    return submit(
+        () -> {
+          try {
+            Appengine client = getAdminAPIClientWithUseragent("get_versions");
+            List<Version> versions =
+                client
+                    .apps()
+                    .services()
+                    .versions()
+                    .list(this.projectId, targetModule)
+                    .execute()
+                    .getVersions();
+            if (versions == null) {
+              return Collections.emptySet();
+            }
+            return versions.stream().map(Version::getId).collect(Collectors.toSet());
+          } catch (IOException e) {
+            throw new ModulesException("Unknown module");
+          }
+        });
   }
 
   private Future<Set<String>> getVersionsAsyncLegacy(String module) {
@@ -240,7 +255,8 @@ class ModulesServiceImpl implements ModulesService {
     if (module != null) {
       requestBuilder.setModule(module);
     }
-    Future<byte[]> rawFuture = makeApiCall(PACKAGE, "GetVersions", requestBuilder.build().toByteArray());
+    Future<byte[]> rawFuture =
+        makeApiCall(PACKAGE, "GetVersions", requestBuilder.build().toByteArray());
     return new ModulesServiceFutureWrapper<>(rawFuture, "GetVersions") {
       @Override
       protected Set<String> wrap(byte[] key) throws InvalidProtocolBufferException {
@@ -256,19 +272,26 @@ class ModulesServiceImpl implements ModulesService {
       return getDefaultVersionAsyncLegacy(module);
     }
     String targetModule = (module != null) ? module : getCurrentModule();
-    return submit(() -> {
-      Appengine client = getAdminAPIClientWithUseragent("get_default_version");
-      Service service = client.apps().services().get(this.projectId, targetModule).execute();
-      TrafficSplit split = service.getSplit();
-      Map<String, Double> allocations = (split != null) ? split.getAllocations() : null;
+    return submit(
+        () -> {
+          String retVersion;
+          try {
+            Appengine client = getAdminAPIClientWithUseragent("get_default_version");
+            Service service = client.apps().services().get(this.projectId, targetModule).execute();
+            TrafficSplit split = service.getSplit();
+            Map<String, Double> allocations = (split != null) ? split.getAllocations() : null;
 
-      String retVersion = findDefaultVersionFromAllocations(allocations);
+            retVersion = findDefaultVersionFromAllocations(allocations);
+          } catch (IOException e) {
+            throw new ModulesException("Unknown module");
+          }
 
-      if (retVersion == null) {
-        throw new IOException("Could not determine default version for module '" + targetModule + "'.");
-      }
-      return retVersion;
-    });
+          if (retVersion == null) {
+            throw new ModulesException(
+                "Could not determine default version for module: " + targetModule);
+          }
+          return retVersion;
+        });
   }
 
   @VisibleForTesting
@@ -303,7 +326,8 @@ class ModulesServiceImpl implements ModulesService {
     if (module != null) {
       requestBuilder.setModule(module);
     }
-    Future<byte[]> rawFuture = makeApiCall(PACKAGE, "GetDefaultVersion", requestBuilder.build().toByteArray());
+    Future<byte[]> rawFuture =
+        makeApiCall(PACKAGE, "GetDefaultVersion", requestBuilder.build().toByteArray());
     return new ModulesServiceFutureWrapper<>(rawFuture, "GetDefaultVersion") {
       @Override
       protected String wrap(byte[] key) throws InvalidProtocolBufferException {
@@ -320,14 +344,25 @@ class ModulesServiceImpl implements ModulesService {
     }
     String targetModule = (module != null) ? module : getCurrentModule();
     String targetVersion = (version != null) ? version : getCurrentVersion();
-    return submit(() -> {
-      Appengine client = getAdminAPIClientWithUseragent("get_num_instances");
-      Version ver = client.apps().services().versions().get(this.projectId, targetModule, targetVersion).execute();
-      if (ver.getManualScaling() != null && ver.getManualScaling().getInstances() != null) {
-        return ver.getManualScaling().getInstances();
-      }
-      return 0;
-    });
+    return submit(
+        () -> {
+          try {
+            Appengine client = getAdminAPIClientWithUseragent("get_num_instances");
+            Version ver =
+                client
+                    .apps()
+                    .services()
+                    .versions()
+                    .get(this.projectId, targetModule, targetVersion)
+                    .execute();
+            if (ver.getManualScaling() != null && ver.getManualScaling().getInstances() != null) {
+              return ver.getManualScaling().getInstances();
+            }
+          } catch (IOException e) {
+            throw new ModulesException("Unknown module version");
+          }
+          throw new ModulesException("");
+        });
   }
 
   private Future<Integer> getNumInstancesAsyncLegacy(String module, String version) {
@@ -338,7 +373,8 @@ class ModulesServiceImpl implements ModulesService {
     if (version != null) {
       requestBuilder.setVersion(version);
     }
-    Future<byte[]> rawFuture = makeApiCall(PACKAGE, "GetNumInstances", requestBuilder.build().toByteArray());
+    Future<byte[]> rawFuture =
+        makeApiCall(PACKAGE, "GetNumInstances", requestBuilder.build().toByteArray());
     return new ModulesServiceFutureWrapper<>(rawFuture, "GetNumInstances") {
       @Override
       protected Integer wrap(byte[] key) throws InvalidProtocolBufferException {
@@ -358,9 +394,15 @@ class ModulesServiceImpl implements ModulesService {
     if (!hasOptedIn()) {
       return setNumInstancesAsyncLegacy(module, version, instances);
     }
+
+    if (instances < 0 || instances > Integer.MAX_VALUE) {
+      throw new ModulesException("Invalid number of instances: " + instances);
+    }
+
     String targetModule = (module != null) ? module : getCurrentModule();
     String targetVersion = (version != null) ? version : getCurrentVersion();
-    Version body = new Version().setManualScaling(new ManualScaling().setInstances((int) instances));
+    Version body =
+        new Version().setManualScaling(new ManualScaling().setInstances((int) instances));
     return patchVersion(targetModule, targetVersion, body, "manualScaling.instances");
   }
 
@@ -373,7 +415,8 @@ class ModulesServiceImpl implements ModulesService {
       requestBuilder.setVersion(version);
     }
     requestBuilder.setInstances(instances);
-    Future<byte[]> rawFuture = makeApiCall(PACKAGE, "SetNumInstances", requestBuilder.build().toByteArray());
+    Future<byte[]> rawFuture =
+        makeApiCall(PACKAGE, "SetNumInstances", requestBuilder.build().toByteArray());
     return new ModulesServiceFutureWrapper<>(rawFuture, "SetNumInstances") {
       @Override
       protected Void wrap(byte[] key) throws InvalidProtocolBufferException {
@@ -399,16 +442,17 @@ class ModulesServiceImpl implements ModulesService {
     StartModuleRequest.Builder requestBuilder = StartModuleRequest.newBuilder();
     requestBuilder.setModule(module);
     requestBuilder.setVersion(version);
-    Future<byte[]> rawFuture = makeApiCall(PACKAGE, "StartModule", requestBuilder.build().toByteArray());
+    Future<byte[]> rawFuture =
+        makeApiCall(PACKAGE, "StartModule", requestBuilder.build().toByteArray());
     Future<Void> modulesServiceFuture =
         new ModulesServiceFutureWrapper<>(rawFuture, "StartModule") {
-      @Override
-      protected Void wrap(byte[] key) throws InvalidProtocolBufferException {
-        StartModuleResponse.Builder responseBuilder = StartModuleResponse.newBuilder();
-        responseBuilder.mergeFrom(key);
-        return null;
-      }
-    };
+          @Override
+          protected Void wrap(byte[] key) throws InvalidProtocolBufferException {
+            StartModuleResponse.Builder responseBuilder = StartModuleResponse.newBuilder();
+            responseBuilder.mergeFrom(key);
+            return null;
+          }
+        };
     return new IgnoreUnexpectedStateExceptionFuture(modulesServiceFuture, STARTING_STARTED_MESSAGE);
   }
 
@@ -431,16 +475,17 @@ class ModulesServiceImpl implements ModulesService {
     if (version != null) {
       requestBuilder.setVersion(version);
     }
-    Future<byte[]> rawFuture = makeApiCall(PACKAGE, "StopModule", requestBuilder.build().toByteArray());
+    Future<byte[]> rawFuture =
+        makeApiCall(PACKAGE, "StopModule", requestBuilder.build().toByteArray());
     Future<Void> modulesServiceFuture =
         new ModulesServiceFutureWrapper<>(rawFuture, "StopModule") {
-      @Override
-      protected Void wrap(byte[] key) throws InvalidProtocolBufferException {
-        StopModuleResponse.Builder responseBuilder = StopModuleResponse.newBuilder();
-        responseBuilder.mergeFrom(key);
-        return null;
-      }
-    };
+          @Override
+          protected Void wrap(byte[] key) throws InvalidProtocolBufferException {
+            StopModuleResponse.Builder responseBuilder = StopModuleResponse.newBuilder();
+            responseBuilder.mergeFrom(key);
+            return null;
+          }
+        };
     return new IgnoreUnexpectedStateExceptionFuture(modulesServiceFuture, STOPPING_STOPPED_MESSAGE);
   }
 
@@ -450,26 +495,37 @@ class ModulesServiceImpl implements ModulesService {
     }
     String targetModule = (module != null) ? module : getCurrentModule();
     String targetVersion = (version != null) ? version : getCurrentVersion();
-    return submit(() -> {
-      Appengine client = getAdminAPIClientWithUseragent("get_version_hostname");
-      Application appResponse = client.apps().get(this.projectId).execute();
-      String defaultHostname = appResponse.getDefaultHostname();
+    return submit(
+        () -> {
+          try {
+            Appengine client = getAdminAPIClientWithUseragent("get_version_hostname");
+            Application appResponse = client.apps().get(this.projectId).execute();
+            String defaultHostname = appResponse.getDefaultHostname();
 
-      Set<String> services = getModules();
+            Set<String> services = getModules();
 
-      if (services.size() == 1 && services.contains("default")) {
-        if (!"default".equals(targetModule)) {
-          throw new ModulesException("Module '" + targetModule + "' not found.");
-        }
-        return constructHostname(targetVersion, defaultHostname);
-      }
-      return constructHostname(targetVersion, targetModule, defaultHostname);
-    });
+            if (!services.contains(targetModule)) {
+              throw new ModulesException("Unknown module");
+            }
+
+            if (services.size() == 1 && services.contains("default")) {
+              if (!"default".equals(targetModule)) {
+                throw new ModulesException("Unknown module");
+              }
+              return constructHostname(targetVersion, defaultHostname);
+            }
+            return constructHostname(targetVersion, targetModule, defaultHostname);
+          } catch (IOException e) {
+            throw new ModulesException(
+                "Unknown module");
+          }
+        });
   }
 
   private Future<String> getVersionHostnameAsyncLegacy(String module, String version) {
     GetHostnameRequest.Builder requestBuilder = newGetHostnameRequestBuilder(module, version);
-    Future<byte[]> rawFuture = makeApiCall(PACKAGE, "GetHostname", requestBuilder.build().toByteArray());
+    Future<byte[]> rawFuture =
+        makeApiCall(PACKAGE, "GetHostname", requestBuilder.build().toByteArray());
     return new ModulesServiceFutureWrapper<>(rawFuture, "GetHostname") {
       @Override
       protected String wrap(byte[] key) throws InvalidProtocolBufferException {
@@ -490,51 +546,72 @@ class ModulesServiceImpl implements ModulesService {
     int instanceNum;
     try {
       instanceNum = Integer.parseInt(instance);
-    } catch (NumberFormatException e) {
+    } catch (Exception e) {
       throw new IllegalArgumentException("The specified instance ID must be an integer.", e);
     }
     if (instanceNum < 0) {
-      throw new IllegalArgumentException("The specified instance must be an integer greater than or equal to 0.");
+      throw new IllegalArgumentException(
+          "The specified instance must be an integer greater than or equal to 0.");
     }
 
     String targetModule = (module != null) ? module : getCurrentModule();
     String targetVersion = (version != null) ? version : getCurrentVersion();
-    return submit(() -> {
-      Appengine client = getAdminAPIClientWithUseragent("get_instance_hostname");
-      Application appResponse = client.apps().get(this.projectId).execute();
-      String defaultHostname = appResponse.getDefaultHostname();
+    return submit(
+        () -> {
+          try {
+            Appengine client = getAdminAPIClientWithUseragent("get_instance_hostname");
+            Application appResponse = client.apps().get(this.projectId).execute();
+            String defaultHostname = appResponse.getDefaultHostname();
 
-      Set<String> services = getModules();
+            Set<String> services = getModules();
 
-      if (services.size() == 1 && services.contains("default")) {
-        if (!"default".equals(targetModule)) {
-           throw new ModulesException("Module '" + targetModule + "' not found.");
-        }
-        return constructHostname(instance, targetVersion, defaultHostname);
-      }
+            if (services.size() == 1 && services.contains("default")) {
+              if (!"default".equals(targetModule)) {
+                throw new ModulesException("Module '" + targetModule + "' not found.");
+              }
+              return constructHostname(instance, targetVersion, defaultHostname);
+            }
 
-      Version versionDetails = client.apps().services().versions()
-          .get(this.projectId, targetModule, targetVersion)
-          .setView("FULL")
-          .execute();
+            Version versionDetails =
+                client
+                    .apps()
+                    .services()
+                    .versions()
+                    .get(this.projectId, targetModule, targetVersion)
+                    .setView("FULL")
+                    .execute();
 
-      ManualScaling manualScaling = versionDetails.getManualScaling();
-      if (manualScaling == null || manualScaling.getInstances() == null) {
-        throw new ModulesException("Instance-specific hostnames are only available for manually scaled services.");
-      }
-      Integer manualScaling_numsInstances = manualScaling.getInstances();
-      if (instanceNum >= manualScaling_numsInstances) {
-        throw new ModulesException("The specified instance does not exist for this module/version.");
-      }
+            ManualScaling manualScaling = versionDetails.getManualScaling();
+            if (manualScaling == null || manualScaling.getInstances() == null) {
+              throw new ModulesException(
+                  "Instance-specific hostnames are only available for manually scaled services.");
+            }
+            Integer manualScalingNumsInstances = manualScaling.getInstances();
+            if (instanceNum >= manualScalingNumsInstances) {
+              throw new ModulesException(
+                  "The specified instance does not exist for this module/version.");
+            }
 
-      return constructHostname(instance, targetVersion, targetModule, defaultHostname);
-    });
+            return constructHostname(instance, targetVersion, targetModule, defaultHostname);
+          } catch (IOException e) {
+            throw new ModulesException(
+                "Could not retrieve instance hostname for module: "
+                    + targetModule
+                    + ", version: "
+                    + targetVersion
+                    + ", instance: "
+                    + instance,
+                e);
+          }
+        });
   }
 
-  private Future<String> getInstanceHostnameAsyncLegacy(String module, String version, String instance) {
+  private Future<String> getInstanceHostnameAsyncLegacy(
+      String module, String version, String instance) {
     GetHostnameRequest.Builder requestBuilder = newGetHostnameRequestBuilder(module, version);
     requestBuilder.setInstance(instance);
-    Future<byte[]> rawFuture = makeApiCall(PACKAGE, "GetHostname", requestBuilder.build().toByteArray());
+    Future<byte[]> rawFuture =
+        makeApiCall(PACKAGE, "GetHostname", requestBuilder.build().toByteArray());
     return new ModulesServiceFutureWrapper<>(rawFuture, "GetHostname") {
       @Override
       protected String wrap(byte[] key) throws InvalidProtocolBufferException {
@@ -553,7 +630,9 @@ class ModulesServiceImpl implements ModulesService {
     try {
       GoogleCredentials credentials = GoogleCredentials.getApplicationDefault();
       if (credentials.createScopedRequired()) {
-        credentials = credentials.createScoped(Arrays.asList("https://www.googleapis.com/auth/cloud-platform"));
+        credentials =
+            credentials.createScoped(
+                Arrays.asList("https://www.googleapis.com/auth/cloud-platform"));
       }
       HttpRequestInitializer requestInitializer = new HttpCredentialsAdapter(credentials);
       String userAgent = "appengine-modules-api-java-client/" + methodName;
@@ -629,24 +708,42 @@ class ModulesServiceImpl implements ModulesService {
   }
 
   @VisibleForTesting
-  protected Future<Void> patchVersion(String module, String version, Version body, String updateMask) {
-    return submit(() -> {
-      String methodName = "";
-      if (body.getManualScaling() != null) {
-        methodName = "set_num_instances";
-      } else if (body.getServingStatus() != null) {
-        if ("SERVING".equals(body.getServingStatus())) {
-          methodName = "start_version";
-        } else if ("STOPPED".equals(body.getServingStatus())) {
-          methodName = "stop_version";
-        }
-      }
-      Appengine client = getAdminAPIClientWithUseragent(methodName);
-      client.apps().services().versions().patch(this.projectId, module, version, body)
-          .setUpdateMask(updateMask)
-          .execute();
-      return null;
-    });
+  protected Future<Void> patchVersion(
+      String module, String version, Version body, String updateMask) {
+    return submit(
+        () -> {
+          String methodName = "";
+          String operationDescription = "";
+
+          // Determine the specific operation for the error message
+          if (body.getManualScaling() != null) {
+            methodName = "set_num_instances";
+            operationDescription = "SetNumInstances";
+          } else if (body.getServingStatus() != null) {
+            if ("SERVING".equals(body.getServingStatus())) {
+              methodName = "start_version";
+              operationDescription = "StartVersion";
+            } else if ("STOPPED".equals(body.getServingStatus())) {
+              methodName = "stop_version";
+              operationDescription = "StopVersion";
+            }
+          }
+
+          try {
+            Appengine client = getAdminAPIClientWithUseragent(methodName);
+            client
+                .apps()
+                .services()
+                .versions()
+                .patch(this.projectId, module, version, body)
+                .setUpdateMask(updateMask)
+                .execute();
+            return null;
+          } catch (IOException e) {
+            throw new ModulesException(
+                "Unexpected state with method '" + operationDescription + "'");
+          }
+        });
   }
 
   // --- Inner Classes ---
@@ -675,8 +772,8 @@ class ModulesServiceImpl implements ModulesService {
       }
     }
 
-    private RuntimeException convertApplicationException(String method,
-        ApiProxy.ApplicationException e) {
+    private RuntimeException convertApplicationException(
+        String method, ApiProxy.ApplicationException e) {
       switch (ErrorCode.forNumber(e.getApplicationError())) {
         case INVALID_MODULE:
           return new ModulesException("Unknown module");
