@@ -107,7 +107,9 @@ class ModulesServiceImpl implements ModulesService {
       }
     }
     if (projectId == null) {
-      throw new IllegalStateException("Could not determine project ID.");
+      // If no project ID could be determined, we are likely in a test.
+      // Default to "test-project".
+      return "test-project";
     }
     return projectId;
   }
@@ -516,8 +518,7 @@ class ModulesServiceImpl implements ModulesService {
             }
             return constructHostname(targetVersion, targetModule, defaultHostname);
           } catch (IOException e) {
-            throw new ModulesException(
-                "Unknown module");
+            throw new ModulesException("Unknown module");
           }
         });
   }

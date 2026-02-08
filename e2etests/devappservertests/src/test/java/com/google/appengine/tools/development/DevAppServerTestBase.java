@@ -173,6 +173,12 @@ public abstract class DevAppServerTestBase {
     runtimeArgs.add("java.base/sun.net.www.protocol.http=ALL-UNNAMED");
     runtimeArgs.add("--add-opens");
     runtimeArgs.add("java.base/sun.net.www.protocol.https=ALL-UNNAMED");
+    runtimeArgs.add("--add-opens");
+    runtimeArgs.add("java.base/java.lang.reflect=ALL-UNNAMED");
+    runtimeArgs.add("--add-opens");
+    runtimeArgs.add("java.base/java.io=ALL-UNNAMED");
+    runtimeArgs.add("--add-opens");
+    runtimeArgs.add("java.base/java.security=ALL-UNNAMED");
 
     runtimeArgs.add("-Dappengine.use.EE8=" + System.getProperty("appengine.use.EE8"));
     runtimeArgs.add("-Dappengine.use.EE10=" + System.getProperty("appengine.use.EE10"));
@@ -246,8 +252,7 @@ public abstract class DevAppServerTestBase {
       throws Exception {
     HttpGet get =
         new HttpGet(
-            String.format(
-                "http://%s%s", HostAndPort.fromParts("127.0.0.1", jettyPort), url));
+            String.format("http://%s%s", HostAndPort.fromParts("127.0.0.1", jettyPort), url));
     String content = "";
     int retCode = 0;
     for (int i = 0; i < numberOfRetries; i++) {
@@ -268,8 +273,7 @@ public abstract class DevAppServerTestBase {
       throws Exception {
     HttpGet get =
         new HttpGet(
-            String.format(
-                "http://%s%s", HostAndPort.fromParts("127.0.0.1", jettyPort), url));
+            String.format("http://%s%s", HostAndPort.fromParts("127.0.0.1", jettyPort), url));
     String content = "";
     int retCode = 0;
     for (int i = 0; i < numberOfRetries; i++) {

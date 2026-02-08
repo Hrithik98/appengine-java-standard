@@ -40,6 +40,7 @@
       <module>http-headers</module>
       <module>java8-jar</module>
       <module>java8-no-webxml</module>
+      <module>modules-test-app</module>
       <module>sampleapp</module>
       <module>sampleapp-automatic-module</module>
       <module>sampleapp-backends</module>

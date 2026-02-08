@@ -228,6 +228,15 @@
           <failOnWarnings>false</failOnWarnings>
         </configuration>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <environmentVariables>
+            <GOOGLE_CLOUD_PROJECT>test-project</GOOGLE_CLOUD_PROJECT>
+          </environmentVariables>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
   <profiles>
